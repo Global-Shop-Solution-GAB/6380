@@ -1,0 +1,155 @@
+﻿Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Programmed for GS Mobile
+'hook id 31982 - post process for WIR200 J55 transactions
+'by Brady Stevens
+'06/03/21
+'programmed for CSS
+'purpose is to allow mobile user to decide if they wish to close a material sequence they perform a RTS against 
+'where the open material requirement will become greater than 0
+'logic added 03/15/22 to allow std issue to wo by lot transaction to pass a close flag.  If close flag passed to WL.Field_13= 1 then close material seq
+
+V.Local.sQuery.Declare(String)
+V.Local.sQuery1.declare(String)
+V.Local.sQuery2.declare(String)
+V.Local.sJob.Declare(String)
+V.Local.sSuffix.Declare(String)
+V.Local.sSeq.Declare(String)
+V.Local.sName.Declare(String)
+V.Local.sValue.Declare(String)
+V.Local.sUID.Declare(String)
+V.Local.sUPID.Declare
+V.Local.sUserid.Declare(String)
+V.Local.sPrinter.Declare(String)
+V.Local.sReportName.Declare(String)
+V.Local.sTransID.Declare(String)
+V.Local.sTransSfx.Declare(String)
+V.Local.sPrefix.Declare(String)
+V.Local.sTransType.Declare(String)
+V.Local.sFromBin.Declare(String)
+V.Local.sToBin.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.sLoc.Declare(String)
+V.Local.sLot.Declare(String)
+V.Local.sHeat.Declare(String)
+V.Local.sSerial.Declare(String)
+V.Local.sLotQuantity.Declare(String)
+V.Local.sCartonQty.declare(Long)
+V.Local.sTotalQty.Declare(Float)
+V.Local.sToLot.Declare(String)
+V.Local.slastLot.Declare(String)
+V.Local.scurrentlotqty.Declare(String)
+v.Local.stoLoc.Declare(String)
+V.Local.sFromLoc.Declare(String)
+v.Local.sbHeatPass.Declare(boolean)
+v.Local.slabelname.Declare(String)
+v.Local.iRptID.Declare(String)
+v.Local.sReportpath.Declare(String)
+v.Local.bExists.Declare(Boolean)
+v.Local.sDescr1.Declare(String)
+v.Local.sSQL.Declare(String)
+v.Local.iBIRunID.Declare(Long)
+V.Local.iBILogID.Declare(Long)
+v.Local.spartprefix.Declare(String)
+v.Local.bClose.Declare(Boolean)
+v.Local.iret.Declare(Long)
+
+V.Local.dateyymmdd.Declare(String)
+V.Local.year.Declare(String)
+V.Local.month.Declare(String)
+V.Local.day.Declare(String)
+V.Local.hour.Declare(String)
+V.Local.minute.Declare(String)
+V.Local.timemmnnss.Declare(String)
+V.Local.timehhnnss.Declare(String)
+F.Intrinsic.Date.Year(V.Ambient.Date,V.Local.year)
+F.Intrinsic.Date.Month(V.Ambient.Date,V.Local.month)
+F.Intrinsic.String.LPad(V.Local.month,0,2,V.Local.MONTH)
+F.Intrinsic.Date.Day(V.Ambient.Date,V.Local.day)
+F.Intrinsic.String.LPad(V.Local.day,0,2,V.Local.day)
+F.Intrinsic.DATE.Hour(V.Ambient.Time,V.LOCAL.HOUR)
+F.Intrinsic.String.LPad(V.Local.hour,0,2,V.Local.hour)
+F.Intrinsic.DATE.MINUTE(V.Ambient.Time,V.LOCAL.MINUTE)
+F.Intrinsic.String.LPad(V.Local.minute,0,2,V.Local.minute)
+F.Intrinsic.String.Concat(V.Local.year.Right2,V.Local.month,V.Local.day,V.Local.dateyymmdd)
+F.Intrinsic.String.Concat(V.Local.hour,V.Local.minute,"0000",V.Local.timehhnnss)
+
+V.Local.sTransID.Set(V.Passed.LINE-ID)
+V.Local.sTransSfx.Set("0000")
+Function.ODBC.Connection!Conx.Opencompanyconnection
+
+F.Intrinsic.String.Build("Select Field_1, Field_2, Field_3, Field_4, Field_5, Field_6, Field_7, Field_8, Field_9, Field_10, Field_11, Field_12, Field_13, Field_20, Trans_Type from WIRELESS_LINE WHERE TRANS_ID = '{0}'", V.Local.sTransID, V.Local.sSQL)
+Function.ODBC.Connection!Conx.OpenRecordsetRO("rstWIR",V.Local.sSQL)
+	V.Local.sTransType.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Trans_Type)
+	V.Local.sJob.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_9)
+	V.Local.sSuffix.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_10)
+	V.Local.sSeq.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_11)
+	V.Local.sLot.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_5)
+	V.Local.sheat.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_7)
+	V.Local.sFromBin.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_6)
+	V.Local.sLotQuantity.Set(V.ODBC.Conx!rstWIR.FieldValTrim!Field_4)
+	f.Intrinsic.String.Len(v.Local.sLotQuantity,v.Local.iret)
+	f.Intrinsic.Math.Sub(v.Local.iret,4,v.Local.iret)
+	f.Intrinsic.String.Left(v.Local.sLotQuantity,v.Local.iret,v.Local.sLotQuantity)
+	f.Intrinsic.Control.If(V.ODBC.Conx!rstWIR.FieldValTrim!Field_20,=,"on")
+		V.Local.bClose.Set(True)
+	'added 03/15/22 to close through std issue to wo by lot
+	f.Intrinsic.Control.ElseIf(V.ODBC.Conx!rstWIR.FieldValTrim!Field_13,=,"1")
+		V.Local.bClose.Set(True)
+	f.Intrinsic.Control.Else
+		V.Local.bClose.Set(False)
+	f.Intrinsic.Control.EndIf
+
+F.ODBC.Conx!rstWIR.Close
+
+'Check if close flag is set from RTS custom mobile transaction and close JSS for job_operations.flag_closed to Y and 
+'delete job_commitments and reduce inventory_mstr.qty_required against part
+
+f.Intrinsic.Control.If(v.Local.bClose,=,True)
+
+    F.Global.Callwrapper.New("CloseWOSeq","Manufacturing.CloseWorkOrderSequence")
+    F.Global.Callwrapper.SetProperty("CloseWOSeq","BeginningWorkOrder",V.Local.sJob)
+    F.Global.Callwrapper.SetProperty("CloseWOSeq","BeginningWorkOrderSuffix",V.Local.sSuffix)
+    F.Global.Callwrapper.SetProperty("CloseWOSeq","WorkOrderSequence",V.Local.sSeq)
+    F.Global.Callwrapper.SetProperty("CloseWOSeq","CloseDate",V.Ambient.Date)
+    F.Global.Callwrapper.Run("CloseWOSeq")
+
+	'close material seq set close flag and complete date
+'	f.Intrinsic.String.Build("UPDATE JOB_OPERATIONS SET FLAG_CLOSED = 'Y', DATE_COMPLETED = '{2}' WHERE JOB = '{0}' AND SUFFIX = '{1}' AND SEQ = '{2}';",V.Local.sJob,V.Local.sSuffix,V.Local.sSeq,V.Local.dateyymmdd,V.Local.sSQL)
+'	F.ODBC.Connection!Conx.Execute(v.Local.sSQL)
+	'delete open commitment
+'	f.Intrinsic.String.Build("DELETE JOB_COMMITMENTS WHERE JOB = '{0}' AND SUFFIX = '{1}' AND SEQUENCE = '{2}';",V.Local.sJob,V.Local.sSuffix,V.Local.sSeq,V.Local.sSQL)
+'	F.ODBC.Connection!Conx.Execute(v.Local.sSQL)
+
+	'reduce required qty in inventory master
+	'get issue part number and location
+'	F.Intrinsic.String.Build("Select JO.PART,JH.LOCATION from V_JOB_OPERATIONS JO LEFT JOIN V_JOB_HEADER JH ON JO.JOB=JH.JOB AND JO.SUFFIX=JH.SUFFIX where JO.JOB = '{0}' AND JO.SUFFIX = '{1}' AND JO.SEQ = '{2}';",V.Local.sJob,V.Local.sSuffix,V.Local.sSeq,V.Local.sSQL)
+'	Function.ODBC.Connection!Conx.OpenRecordsetRO("rstPARTLOC",V.Local.sSQL)	
+'	V.Local.sPart.Set(V.ODBC.Conx!rstPARTLOC.FieldValTrim!PART)
+'	v.Local.sLoc.Set(V.ODBC.Conx!rstPARTLOC.FieldValTrim!LOCATION)
+'	F.ODBC.Conx!rstPARTLOC.Close
+'	f.Intrinsic.String.Build("UPDATE INVENTORY_MSTR SET QTY_REQUIRED = QTY_REQUIRED+{2} WHERE PART = '{0}' AND LOCATION = '{1}';",V.Local.sPart,V.Local.sLoc,V.Local.sLotQuantity,V.Local.sSQL)
+'	F.ODBC.Connection!Conx.Execute(v.Local.sSQL)
+f.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.CallSub(close)
+
+Program.Sub.Main.End
+
+
+
+Program.Sub.close.Start
+F.ODBC.Connection!Conx.Close
+F.Intrinsic.Control.End
+Program.Sub.close.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$$}$12:00:00 AM
+${$5$}$2.0.0.0$}$2
+${$6$}$bstevens$}$20220315133252214$}$3Pg7+K2MGztoXyjxMVZqWaM5g3GOUsSNrM4TCkZv+MpTJ5YHon2CfoBFS1GRVLAnlHCzoxxO3YLeIDqVsF3HQg==
+Program.Sub.Comments.End
